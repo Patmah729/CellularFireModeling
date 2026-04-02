@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import arcpy
+import ModelFire, DeriveFuel
 
 class Toolbox:
     def __init__(self):
@@ -11,7 +12,6 @@ class Toolbox:
 
         # List of tool classes associated with this toolbox
         self.tools = [ArcAutoFire,DeriveFuelModel]
-
 
 class ArcAutoFire:
     def __init__(self):
@@ -30,6 +30,22 @@ class ArcAutoFire:
             parameterType="Required",
             direction="Input")
         
+        #Barrier features input
+        barriers = arcpy.Parameter(
+            displayName="Barrier Features",
+            name="barriers",
+            datatype="DEFeatureClass",
+            parameterType="Optional",
+            direction="Input")
+        
+        # Ignition Point(s)
+        ignitions = arcpy.Parameter(
+            displayName="Ignition Point(s)",
+            name="ignitions",
+            datatype="DEFeatureClass",
+            parameterType="Required",
+            direction="Input")
+
         # DEM input
         dem = arcpy.Parameter(
             displayName="Input Elevation Raster",
@@ -40,15 +56,15 @@ class ArcAutoFire:
 
         # Wind parameters
         windDir = arcpy.Parameter(
-            displayName="Wind Direction",
+            displayName="Wind Direction (Degrees)",
             name="windDir",
             datatype="GPDouble",
             parameterType="Optional",
             direction="Input")
         #windDir.value = 0
-        windSp.filters = ["CodedValue", "Range"]
-        windSp.filters[0].list = ["MIN", "MAX"]
-        windSp.filters[1].list = [0, 359]
+        #windDir.filters = ["CodedValue", "Range"]
+        #windDir.filters[0].list = ["MIN", "MAX"]
+        #windDir.filters[1].list = [0, 359]
 
         windSp = arcpy.Parameter(
             displayName="Wind Speed (Meters per Second)",
@@ -57,9 +73,9 @@ class ArcAutoFire:
             parameterType="Optional",
             direction="Input")
         #windSp.value = 0
-        windSp.filters = ["CodedValue", "Range"]
-        windSp.filters[0].list = ["MIN", "MAX"]
-        windSp.filters[1].list = [0, 32.7]
+        #windSp.filters = ["CodedValue", "Range"]
+        #windSp.filters[0].list = ["MIN", "MAX"]
+        #windSp.filters[1].list = [0, 32.7]
 
         # Output
         output = arcpy.Parameter(
@@ -68,9 +84,22 @@ class ArcAutoFire:
             datatype="DEGeodatasetType",
             parameterType="Required",
             direction="Output")
+        
+        cellSize = arcpy.Parameter(
+            displayName="Cell Size",
+            name="cellSize",
+            datatype="GPDouble",
+            parameterType="Required",
+            direction="Output")
+        iterations = arcpy.Parameter(
+            displayName="Number of Iterations",
+            name="iterations",
+            datatype="GPDouble",
+            parameterType="Required",
+            direction="Output")
+        iterations.value = 1
 
-        params = [fuelModel, dem, windDir, windSp, output]
-
+        params = [fuelModel, dem, barriers, ignitions, windDir, windSp, output, cellSize, iterations]
         return params
 
     def isLicensed(self):
@@ -90,6 +119,7 @@ class ArcAutoFire:
 
     def execute(self, parameters, messages):
         """The source code of the tool."""
+        ModelFire.execute(parameters)
         return
 
     def postExecute(self, parameters):
@@ -97,6 +127,7 @@ class ArcAutoFire:
         added to the display."""
         return
 
+#NOT YET IMPLEMENTED
 class DeriveFuelModel:
     def __init__(self):
         """Define the tool (tool name is the name of the class)."""
@@ -155,7 +186,7 @@ class DeriveFuelModel:
         return
 
     def execute(self, parameters, messages):
-        """The source code of the tool."""
+        DeriveFuel.execute(parameters)
         return
 
     def postExecute(self, parameters):
