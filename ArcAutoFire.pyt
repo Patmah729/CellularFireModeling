@@ -26,10 +26,17 @@ class ArcAutoFire:
         fuelModel = arcpy.Parameter(
             displayName="Input Fuel Model",
             name="in_features",
-            datatype="GPRasterLayer",
+            datatype="DERasterDataset",
             parameterType="Required",
             direction="Input")
-        
+        # DEM input
+        dem = arcpy.Parameter(
+            displayName="Input DEM",
+            name="dem",
+            datatype="DERasterDataset",
+            parameterType="Required",
+            direction="Input")        
+
         #Barrier features input
         barriers = arcpy.Parameter(
             displayName="Barrier Features",
@@ -46,14 +53,6 @@ class ArcAutoFire:
             parameterType="Required",
             direction="Input")
 
-        # DEM input
-        dem = arcpy.Parameter(
-            displayName="Input Elevation Raster",
-            name="dem",
-            datatype="GPRasterLayer",
-            parameterType="Required",
-            direction="Input")
-
         # Wind parameters
         windDir = arcpy.Parameter(
             displayName="Wind Direction (Degrees)",
@@ -61,7 +60,7 @@ class ArcAutoFire:
             datatype="GPDouble",
             parameterType="Optional",
             direction="Input")
-        #windDir.value = 0
+        windDir.value = 0
         #windDir.filters = ["CodedValue", "Range"]
         #windDir.filters[0].list = ["MIN", "MAX"]
         #windDir.filters[1].list = [0, 359]
@@ -72,34 +71,43 @@ class ArcAutoFire:
             datatype="GPDouble",
             parameterType="Optional",
             direction="Input")
-        #windSp.value = 0
+        windSp.value = 5
         #windSp.filters = ["CodedValue", "Range"]
         #windSp.filters[0].list = ["MIN", "MAX"]
         #windSp.filters[1].list = [0, 32.7]
+        
+        iterations = arcpy.Parameter(
+            displayName="Number of Iterations",
+            name="iterations",
+            datatype="GPDouble",
+            parameterType="Required",
+            direction="Input")
+        iterations.value = 1
 
+        #probably should just grab these from the environment but this is fine for now
+        extent = arcpy.Parameter(
+            displayName="Extent",
+            name="extent",
+            datatype="GPExtent",
+            parameterType="Required",
+            direction="Input")
+        cellSize = arcpy.Parameter(
+            displayName="Cell Size",
+            name="cellSize",
+            datatype="GPDouble",
+            parameterType="Required",
+            direction="Input")
+             
         # Output
         output = arcpy.Parameter(
             displayName="Output Features",
             name="out_features",
             datatype="DEGeodatasetType",
             parameterType="Required",
-            direction="Output")
+            direction="Output")            
         
-        cellSize = arcpy.Parameter(
-            displayName="Cell Size",
-            name="cellSize",
-            datatype="GPDouble",
-            parameterType="Required",
-            direction="Output")
-        iterations = arcpy.Parameter(
-            displayName="Number of Iterations",
-            name="iterations",
-            datatype="GPDouble",
-            parameterType="Required",
-            direction="Output")
-        iterations.value = 1
 
-        params = [fuelModel, dem, barriers, ignitions, windDir, windSp, output, cellSize, iterations]
+        params = [fuelModel, dem, barriers, ignitions, windDir, windSp, output,  iterations, cellSize, extent]
         return params
 
     def isLicensed(self):
