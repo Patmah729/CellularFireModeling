@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
-
-import arcpy
+from datetime import datetime
+import arcpy, os
 import ModelFire, DeriveFuel
 
 class Toolbox:
@@ -26,14 +26,14 @@ class ArcAutoFire:
         fuelModel = arcpy.Parameter(
             displayName="Input Fuel Model",
             name="in_features",
-            datatype="DERasterDataset",
+            datatype="GPRasterLayer",
             parameterType="Required",
             direction="Input")
         # DEM input
         dem = arcpy.Parameter(
             displayName="Input DEM",
             name="dem",
-            datatype="DERasterDataset",
+            datatype="GPRasterLayer",
             parameterType="Required",
             direction="Input")        
 
@@ -41,7 +41,7 @@ class ArcAutoFire:
         barriers = arcpy.Parameter(
             displayName="Barrier Features",
             name="barriers",
-            datatype="DEFeatureClass",
+            datatype="GPFeatureLayer",
             parameterType="Optional",
             direction="Input")
         
@@ -49,7 +49,7 @@ class ArcAutoFire:
         ignitions = arcpy.Parameter(
             displayName="Ignition Point(s)",
             name="ignitions",
-            datatype="DEFeatureClass",
+            datatype="GPFeatureLayer",
             parameterType="Required",
             direction="Input")
 
@@ -61,9 +61,8 @@ class ArcAutoFire:
             parameterType="Optional",
             direction="Input")
         windDir.value = 0
-        #windDir.filters = ["CodedValue", "Range"]
-        #windDir.filters[0].list = ["MIN", "MAX"]
-        #windDir.filters[1].list = [0, 359]
+        windDir.filters = ["Range"]
+        windDir.filters[0].list = [0, 359]
 
         windSp = arcpy.Parameter(
             displayName="Wind Speed (Meters per Second)",
@@ -102,10 +101,9 @@ class ArcAutoFire:
         output = arcpy.Parameter(
             displayName="Output Features",
             name="out_features",
-            datatype="DEGeodatasetType",
+            datatype="DEWorkspace",
             parameterType="Required",
             direction="Output")            
-        
 
         params = [fuelModel, dem, barriers, ignitions, windDir, windSp, output,  iterations, cellSize, extent]
         return params
@@ -118,6 +116,28 @@ class ArcAutoFire:
         """Modify the values and properties of parameters before internal
         validation is performed.  This method is called whenever a parameter
         has been changed."""
+        fuel = parameters[0]
+        output = parameters[6]
+
+        if fuel.value and not output.altered:
+            desc = arcpy.Describe(fuel.value)
+
+            # get dataset path
+            path = desc.catalogPath
+
+            # if input is inside a geodatabase, go UP one level
+            if ".gdb" in path:
+                gdb_index = path.lower().find(".gdb")
+                folder = os.path.dirname(path[:gdb_index + 4])
+            else:
+                folder = os.path.dirname(path)
+
+            # clean base name
+            name = os.path.splitext(os.path.basename(path))[0]
+            print(name)
+            # build output gdb path
+            output.value = os.path.join(folder, name + "_fire.gdb")
+
         return
 
     def updateMessages(self, parameters):
@@ -127,6 +147,16 @@ class ArcAutoFire:
 
     def execute(self, parameters, messages):
         """The source code of the tool."""
+        gdb_path = parameters[6].valueAsText
+
+        if not arcpy.Exists(gdb_path):
+            folder = os.path.dirname(gdb_path)
+            name = os.path.basename(gdb_path)
+            arcpy.AddMessage(folder)
+            arcpy.AddMessage(f"Creating GDB at: {gdb_path}")
+            arcpy.management.CreateFileGDB(out_folder_path=folder, 
+                                           out_name=name)
+        
         ModelFire.execute(parameters)
         return
 
