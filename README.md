@@ -2,8 +2,22 @@
 
 Project Produced by Patrick Maher for GRG470C at UT Austin, taught by Dr. Arima in Spring 2026. 
 
-A GIS-Based cellular automata model of wildland fire spread. 
+A GIS-Based cellular automata model of wildland fire spread.
 
+Produces a series of raster outputs showing a modeled fire based on surface vegetation, terrain factors, and wind parameters. Example model output is 6 hours of simulated fire spread in the conditions of the June 2022 Dempsey Fire in Palo Pinto, Texas.
+To use, add this toolbox to your ArcGIS Pro project.
+
+Ensure you don't use any raw raster files for inputs, first convert them to a geoprocessing raster layer.
+
+Required inputs:
+    DEM (https://apps.nationalmap.gov/downloader/#/)
+    LANDFIRE Anderson13 fuel model (https://www.landfire.gov/viewer/)
+    Ignition points (feature class)
+
+Optional inputs:
+    Barrier features (feature class)
+
+References:
 1. Alexander, M., & Cruz, M. (2019). A rule of thumb for estimating a wildfires’s forward spread rate.
 2. Andrews, P. L. (2018). The Rothermel surface fire spread model and associated developments: A comprehensive explanation (RMRS-GTR-371; p. RMRS-GTR-371). U.S. Department of Agriculture, Forest Service, Rocky Mountain Research Station. https://doi.org/10.2737/RMRS-GTR-371
 3. Grishin, A. M., Zima, V. P., Kuznetsov, V. T., & Skorik, A. I. (2002). Ignition of Combustible Forest Materials by a Radiant Energy Flux. Combustion, Explosion and Shock Waves, 38(1), 24–29. https://doi.org/10.1023/A:1014097631884
