@@ -84,7 +84,7 @@ def unifyData(parameters): #unify all raster datasets: ensure cells line up, set
     # Debug raster properties before conversion
     try:
         data['fuel'] = arcpy.RasterToNumPyArray(in_raster=cut, lower_left_corner=llc)
-        arcpy.AddMessage(f"Fuel array shape: {data['fuel'].shape}, dtype: {data['fuel'].dtype}, range: {data['fuel'].min()}-{data['fuel'].max()}")
+        #arcpy.AddMessage(f"Fuel array shape: {data['fuel'].shape}, dtype: {data['fuel'].dtype}, range: {data['fuel'].min()}-{data['fuel'].max()}")
     except Exception as e:
         arcpy.AddMessage(f"Error converting fuel raster: {e}")
         # Try without lower_left_corner
@@ -290,40 +290,43 @@ def execute(parameters):
                         wind_angle = numpy.deg2rad(data['windDir']-90)
                         alignment = numpy.cos(neighbor_angle - wind_angle)
                         if abs(alignment) > 0.707:  # Within 45° of wind direction
-                            wind_influence = 1.0 if alignment > 0 else 0.7
+                            windDir_influence = 1.0 if alignment > 0 else 0.1
                         else:
-                            wind_influence = 0.5
+                            windDir_influence = 0.05
                         
                         # aspect
                         cell_aspect = data['aspect'][cy, cx]  # Degrees from north
                         neighbor_dir = (numpy.degrees(numpy.arctan2(dy, dx)) + 360) % 360  # 0-360 degrees
                         aspect_diff = abs(cell_aspect - neighbor_dir)%360
                         if aspect_diff < 45:  # downslope
-                            aspect_influence = 0.3
+                            aspect_influence = 0.05
                         elif aspect_diff < 135:  #cross-slope
                             aspect_influence = 0.5
                         else:  
                             aspect_influence = 1.0 #upslope
                     
                         slope_deg = data['slope'][cy, cx]
-                        slope_influence = 1.0 #if slope_deg > 25 else max(0.2, slope_deg / 25.0)
+                        slope_influence = 1.0 if slope_deg > 25 else max(0.2, slope_deg / 25.0)
                         
                         fuelto_influence = fuel_spreadto[ny, nx]
                         fuelfrom_influence = fuel_spreadfrom[cy, cx]
-                        
-                        # FORMULA OF MAGIC! THIS IS HWERE THE BIG TWEAKING HAPPENS
-                        combined_influence = wind_influence * aspect_influence * slope_influence * fuelfrom_influence
-                        spread_potential[ny, nx] =+ ((combined_influence) * fuelto_influence)
-                        #spread_potential *= (drying_influence[ny, nx]+1.0)
+                        nondirectionalWind = data['windSp']*3 #crude conversion to feet per second, 
+                        # FORMULAs OF MAGIC! THIS IS WHERE THE BIG TWEAKING HAPPENS
+                        # TEST IMPLEMENTATION OF THE ROTHERMAL FIRE SPREAD FORMULA
+                        rothermal_influence = (windDir_influence)*(fuelfrom_influence*(1+nondirectionalWind+(aspect_influence/slope_influence)))/(fuelto_influence*(1-drying_influence[ny,nx]))
+                        spread_potential[ny,nx] =+ rothermal_influence/data['cellSize']
                         # Increase drying 
-                        drying_influence[ny,nx] = min(1.0, drying_influence[ny, nx] + 0.1)
+                        drying_influence[ny,nx] = min(1.0, drying_influence[ny, nx] + 0.05)
+                        #debug log for one-cell outputs
+                        #arcpy.AddMessage(f"Cell ({cy},{cx}) -> ({ny},{nx}): wind {windDir_influence:.2f}, aspect {aspect_influence:.2f}, slope {slope_influence:.2f}, fuelto {fuelto_influence:.2f}, fuelfrom {fuelfrom_influence:.2f}")
             
             # transition rule
-            # spread_potential = spread_potential * (data['windSp'] * 0.1) 
-            max_potential = spread_potential.min()
-            
+            max_potential = spread_potential.max()
+            mean = spread_potential.mean()
+            # debug message if there's weird spread
+            # arcpy.AddMessage(f"Max spread potential this step: {max_potential:.4f}, with mean: {mean:.4f}")
             if max_potential > 0:
-                random_threshold = numpy.random.random(spread_potential.shape)*max_potential
+                random_threshold = numpy.random.random(spread_potential.shape)#*max_potential
                 new_ignitions = (spread_potential > random_threshold) & (state == 0) & barrier_mask
                 state[new_ignitions] = 1
                 burn_age[new_ignitions] = 0.0
@@ -331,8 +334,10 @@ def execute(parameters):
         # Save one raster per user iteration (after timestep internal minutes)
         # Create display array: barriers = -1, unburned = 0, burning = 1, burned = 2
         display_state = state.copy().astype(numpy.int8)
-        display_state[~barrier_mask] = 3  # Barriers marked as -1
-        
+        display_state[~barrier_mask] = 3  # Barriers marked as 3
+        display_state[state == 0] = 4  # mask for visualization THIS BREAKS THE GIF COLOR MAPPING, FIX LATER
+        display_state[state ==1] = 0
+        display_state[state == 2] = 1
         # create output raster
         viz_raster = arcpy.NumPyArrayToRaster(display_state,
                                               lower_left_corner=data['llc'],
@@ -344,11 +349,17 @@ def execute(parameters):
         arcpy.management.CopyRaster(viz_raster, viz_path)
         
         # symbology
-        colormap_content = """
+        # first is full symbology for reference, second is simplified for better layout creation w/ transparency, but breaks gif mapping.
+        colormap_content = """ 
                             0 211 255 190
-                            1 255 167 127
+                            1 255 85 0
                             2 115 0 0
                             3 197 0 255
+                            4 211 255 190
+                            """
+        colormap_content =  """
+                            0 255 85 0
+                            1 115 0 0
                             """
         
         clr_file = os.path.join(data['output'], f"fire_colormap_{user_iteration + 1}.clr")

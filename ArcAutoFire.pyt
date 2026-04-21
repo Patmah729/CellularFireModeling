@@ -159,7 +159,7 @@ class ArcAutoFire:
         if not arcpy.Exists(gdb_path):
             folder = os.path.dirname(gdb_path)
             name = os.path.basename(gdb_path)
-            arcpy.AddMessage(folder)
+            #arcpy.AddMessage(folder)
             arcpy.AddMessage(f"Creating GDB at: {gdb_path}")
             arcpy.management.CreateFileGDB(out_folder_path=folder, 
                                            out_name=name)
