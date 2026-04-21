@@ -3,9 +3,9 @@ import arcpy, numpy, scipy, os
 
 
 def unifyData(parameters): #unify all raster datasets: ensure cells line up, set data to the same extent, convert rasters to numpy arrays, etc.
-    cellsize = float(parameters[8].value)
+    cellsize = float(parameters[9].value)
     
-    extent = parameters[9].value
+    extent = parameters[10].value
     llc = arcpy.Point(extent.XMin, extent.YMin)
 
     fuel_raster_obj = parameters[0].value
@@ -18,7 +18,7 @@ def unifyData(parameters): #unify all raster datasets: ensure cells line up, set
     snap_source_desc = None
 
     if fuel_raster_path and fuel_raster_path not in ["#", ""]:
-        arcpy.AddMessage(f"Checking fuel raster path exists: {fuel_raster_path}")
+        #arcpy.AddMessage(f"Checking fuel raster path exists: {fuel_raster_path}")
         if arcpy.Exists(fuel_raster_path):
             snap_source = fuel_raster_path
             snap_source_desc = arcpy.Describe(fuel_raster_path)
@@ -40,7 +40,7 @@ def unifyData(parameters): #unify all raster datasets: ensure cells line up, set
 
     arcpy.env.extent = extent
     arcpy.env.cellSize = cellsize
-    arcpy.AddMessage(f"Setting snapRaster to: {snap_source}")
+    #arcpy.AddMessage(f"Setting snapRaster to: {snap_source}")
 
     try:
         arcpy.env.snapRaster = snap_source
@@ -165,6 +165,7 @@ def unifyData(parameters): #unify all raster datasets: ensure cells line up, set
     data['cellSize'] = cellsize
     data['extent'] = extent
     data['llc'] = llc
+    data['timestep'] = parameters[8].value
     return data
         
 def converta13(fuel_array):
@@ -239,8 +240,8 @@ def execute(parameters):
     # Log fuel model statistics
     unique_models = numpy.unique(data['fuel'])
     unique_models = unique_models[unique_models > 0]  # Exclude 0/NODATA
-    arcpy.AddMessage(f"Fuel spread rates range: {fuel_spreadto.min():.3f} - {fuel_spreadto.max():.3f}")
-    arcpy.AddMessage(f"Fuel from rates range: {fuel_spreadfrom.min():.3f} - {fuel_spreadfrom.max():.3f}")
+    # arcpy.AddMessage(f"Fuel spread rates range: {fuel_spreadto.min():.3f} - {fuel_spreadto.max():.3f}")
+    # arcpy.AddMessage(f"Fuel from rates range: {fuel_spreadfrom.min():.3f} - {fuel_spreadfrom.max():.3f}")
 
     #barrier mask
     barrier_mask = (data['barriers'] == 0) & (fuel_spreadto > 0)
@@ -250,19 +251,20 @@ def execute(parameters):
     burn_age = numpy.zeros_like(data['fuel'], dtype=float)
 
     # Adjust this parameter for smoother outputs for gifs. keep at 30 for final vers
-    timestep = 30
+    timestep = int(data['timestep'])
 
     # Track drying influence: being near a fire for longer makes it more likely to ignite
     drying_influence = 0.5
     
     for user_iteration in range(data['iterations']):
-        arcpy.AddMessage(f"Running inumpyut iteration {user_iteration + 1}/{data['iterations']} (30 simulated minutes)")
+        arcpy.AddMessage(f"Running input iteration {user_iteration + 1}/{data['iterations']} ({timestep*(user_iteration+1)} simulated minutes)")
 
         for internal_iter in range(timestep):
             burn_age[state == 1] += 1.0
             burned_out = (burn_age >= max_burn_age) & (state == 1)
             state[burned_out] = 2
             spread_potential = numpy.zeros_like(state, dtype=float)
+            drying_influence = numpy.zeros_like(state, dtype=float)
             burning_cells = numpy.where(state == 1)
             for idx in range(len(burning_cells[0])):
                 cy, cx = burning_cells[0][idx], burning_cells[1][idx]
@@ -288,44 +290,45 @@ def execute(parameters):
                         wind_angle = numpy.deg2rad(data['windDir']-90)
                         alignment = numpy.cos(neighbor_angle - wind_angle)
                         if abs(alignment) > 0.707:  # Within 45° of wind direction
-                            wind_influence = 1.0 if alignment > 0 else 0.2
+                            wind_influence = 1.0 if alignment > 0 else 0.7
                         else:
-                            wind_influence = 0.05
+                            wind_influence = 0.5
                         
                         # aspect
                         cell_aspect = data['aspect'][cy, cx]  # Degrees from north
                         neighbor_dir = (numpy.degrees(numpy.arctan2(dy, dx)) + 360) % 360  # 0-360 degrees
                         aspect_diff = abs(cell_aspect - neighbor_dir)%360
-                        if aspect_diff < 45:  # upslope
-                            aspect_influence = 1.0
+                        if aspect_diff < 45:  # downslope
+                            aspect_influence = 0.3
                         elif aspect_diff < 135:  #cross-slope
-                            aspect_influence = 0.2
+                            aspect_influence = 0.5
                         else:  
-                            aspect_influence = 0.005 #downslope
+                            aspect_influence = 1.0 #upslope
                     
                         slope_deg = data['slope'][cy, cx]
-                        slope_influence = 1.0 if slope_deg > 25 else max(0.2, slope_deg / 25.0)
+                        slope_influence = 1.0 #if slope_deg > 25 else max(0.2, slope_deg / 25.0)
                         
                         fuelto_influence = fuel_spreadto[ny, nx]
                         fuelfrom_influence = fuel_spreadfrom[cy, cx]
                         
                         # FORMULA OF MAGIC! THIS IS HWERE THE BIG TWEAKING HAPPENS
                         combined_influence = wind_influence * aspect_influence * slope_influence * fuelfrom_influence
-                        spread_potential[ny, nx] += ((combined_influence * drying_influence) * fuelto_influence)
-            
-            # Increase drying
-            drying_influence = min(1.0, drying_influence + 0.01)
+                        spread_potential[ny, nx] =+ ((combined_influence) * fuelto_influence)
+                        #spread_potential *= (drying_influence[ny, nx]+1.0)
+                        # Increase drying 
+                        drying_influence[ny,nx] = min(1.0, drying_influence[ny, nx] + 0.1)
             
             # transition rule
-            spread_potential = spread_potential*(.1*data['windSp']) 
-            max_potential = spread_potential.max()
+            # spread_potential = spread_potential * (data['windSp'] * 0.1) 
+            max_potential = spread_potential.min()
+            
             if max_potential > 0:
-                random_threshold = numpy.random.uniform(0, max_potential)
+                random_threshold = numpy.random.random(spread_potential.shape)*max_potential
                 new_ignitions = (spread_potential > random_threshold) & (state == 0) & barrier_mask
                 state[new_ignitions] = 1
                 burn_age[new_ignitions] = 0.0
 
-        # Save one raster per user inumpyut iteration (after 30 internal minutes)
+        # Save one raster per user iteration (after timestep internal minutes)
         # Create display array: barriers = -1, unburned = 0, burning = 1, burned = 2
         display_state = state.copy().astype(numpy.int8)
         display_state[~barrier_mask] = 3  # Barriers marked as -1

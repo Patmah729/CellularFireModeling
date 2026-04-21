@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import arcpy, os, importlib
 import ModelFire
+import timeSeries
 
 class Toolbox:
     def __init__(self):
@@ -10,7 +11,7 @@ class Toolbox:
         self.alias = "ArcAutoFire"
 
         # List of tool classes associated with this toolbox
-        self.tools = [ArcAutoFire]
+        self.tools = [ArcAutoFire, CreateGIF]
 
 class ArcAutoFire:
     def __init__(self):
@@ -81,6 +82,13 @@ class ArcAutoFire:
             parameterType="Required",
             direction="Input")
         iterations.value = 1
+        timestep = arcpy.Parameter(
+            displayName="Number of minutes per iteration",
+            name="timestep",
+            datatype="GPDouble",
+            parameterType="Required",
+            direction="Input")
+        timestep.value = 30
 
         #probably should just grab these from the environment but this is fine for now
         extent = arcpy.Parameter(
@@ -104,7 +112,7 @@ class ArcAutoFire:
             parameterType="Required",
             direction="Output")            
 
-        params = [fuelModel, dem, barriers, ignitions, windDir, windSp, output,  iterations, cellSize, extent]
+        params = [fuelModel, dem, barriers, ignitions, windDir, windSp, output,  iterations, timestep, cellSize, extent]
         return params
 
     def isLicensed(self):
@@ -166,3 +174,82 @@ class ArcAutoFire:
         added to the display."""
         return
     
+class CreateGIF:
+    def __init__(self):
+        """Define the tool (tool name is the name of the class)."""
+        self.label = "Create Animation"
+        self.description = "Create a smooth GIF using the output from the fire model"
+
+    def getParameterInfo(self):
+        # Define parameter definitions
+
+        # input folder
+        in_folder = arcpy.Parameter(
+            displayName="Input Folder",
+            name="in_folder",
+            datatype="DEWorkspace",
+            parameterType="Required",
+            direction="Input")   
+
+         # output folder
+        output = arcpy.Parameter(
+            displayName="Output Features",
+            name="out_features",
+            datatype="DEFolder",
+            parameterType="Required",
+            direction="Output")                
+
+        params = [in_folder, output]
+        return params
+
+    def isLicensed(self):
+        """Set whether the tool is licensed to execute."""
+        return True
+
+    def updateParameters(self, parameters):
+        """Modify the values and properties of parameters before internal
+        validation is performed.  This method is called whenever a parameter
+        has been changed."""
+        inputfolder = parameters[0]
+        output = parameters[1]
+
+        if inputfolder.value and not output.altered:
+            desc = arcpy.Describe(inputfolder.value)
+
+            # get dataset path
+            path = desc.catalogPath
+
+            # if input is inside a geodatabase, go UP one level
+            if ".gdb" in path:
+                gdb_index = path.lower().find(".gdb")
+                folder = os.path.dirname(path[:gdb_index + 4])
+            else:
+                folder = os.path.dirname(path)
+
+            # clean base name
+            name = os.path.splitext(os.path.basename(path))[0]
+            print(name)
+            # build output folder path
+            output.value = os.path.join(folder, name + "_gif_output")
+
+        return
+
+    def updateMessages(self, parameters):
+        """Modify the messages created by internal validation for each tool
+        parameter. This method is called after internal validation."""
+        return
+
+    def execute(self, parameters, messages):
+        """The source code of the tool."""
+        path = parameters[1].valueAsText
+        if not os.path.exists(path):
+            os.makedirs(path)
+        
+        importlib.reload(timeSeries)
+        timeSeries.execute(parameters)
+        return
+
+    def postExecute(self, parameters):
+        """This method takes place after outputs are processed and
+        added to the display."""
+        return
