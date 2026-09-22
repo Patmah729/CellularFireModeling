@@ -299,7 +299,7 @@ def execute(parameters):
                         neighbor_dir = (numpy.degrees(numpy.arctan2(dy, dx)) + 360) % 360  # 0-360 degrees
                         aspect_diff = abs(cell_aspect - neighbor_dir)%360
                         if aspect_diff < 45:  # downslope
-                            aspect_influence = 0.05
+                            aspect_influence = 0.00
                         elif aspect_diff < 135:  #cross-slope
                             aspect_influence = 0.5
                         else:  

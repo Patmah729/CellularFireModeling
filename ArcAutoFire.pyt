@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 import arcpy, os, importlib
 import ModelFire
-import timeSeries
 
 class Toolbox:
     def __init__(self):
